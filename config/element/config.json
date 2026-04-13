@@ -1,0 +1,29 @@
+{
+  "default_server_config": {
+    "m.homeserver": {
+      "base_url": "https://pole.insomniafest.ru",
+      "server_name": "pole.insomniafest.ru"
+    }
+  },
+
+  "disable_custom_urls": true,
+  "disable_guests": true,
+  "features": {
+    "registration": false,
+    "feature_group_calls": false
+  },
+  "room_directory": {
+    "servers": [
+      "insomniafest.ru"
+    ]
+  },
+
+  "brand": "Полевой Чат",
+  "default_theme": "dark",
+  "default_locale": "ru",
+
+  "branding": {
+    "welcome_background_url": "assets/matrix-eye.png",
+    "auth_header_logo_url": "assets/besson.jpg"
+  }
+}

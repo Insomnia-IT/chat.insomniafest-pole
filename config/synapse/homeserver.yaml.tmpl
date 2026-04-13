@@ -1,0 +1,46 @@
+server_name: "pole.insomniafest.ru"
+pid_file: /data/homeserver.pid
+
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: true
+    bind_addresses: ['0.0.0.0']
+    resources:
+      - names: [client, federation]
+        compress: false
+
+database:
+  name: psycopg2
+  args:
+    user: synapse
+    password: "${POSTGRES_PASSWORD}"
+    database: synapse
+    host: pole-postgres
+    cp_min: 5
+    cp_max: 10
+  allow_unsafe_locale: true
+
+enable_registration: false
+registration_requires_token: true
+
+enable_registration_without_verification: false
+
+auto_join_rooms:
+  - "#general:pole.insomniafest.ru"
+autocreate_auto_join_rooms: true
+
+log_config: "/data/matrix.chat.log.config"
+media_store_path: /data/media_store
+
+registration_shared_secret: "${SYNAPSE_REGISTRATION_SHARED_SECRET}"
+macaroon_secret_key: "${MACAROON_SECRET_KEY}"
+form_secret: "${FORM_SECRET}"
+
+signing_key_path: "/data/matrix.chat.signing.key"
+
+trusted_key_servers:
+  - server_name: "matrix.org"
+
+report_stats: false

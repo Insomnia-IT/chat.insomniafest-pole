@@ -1,0 +1,8 @@
+.DS_Store
+data/postgres/*
+!data/postgres/.gitkeep
+.env
+.env.*
+config/synapse/homeserver.yaml
+*.key
+*.log

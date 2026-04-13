@@ -1,0 +1,81 @@
+services:
+  pole-postgres:
+    image: postgres:16.3
+    container_name: pole_matrix_postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: synapse
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C --lc-collate=C --lc-ctype=C"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    networks:
+      - pole-matrix
+
+  pole-synapse:
+    image: matrixdotorg/synapse:v1.150.0
+    container_name: pole_matrix_synapse
+    restart: unless-stopped
+    depends_on:
+      - pole-postgres
+    env_file:
+      - .env
+    environment:
+      SYNAPSE_SERVER_NAME: pole.insomniafest.ru
+      SYNAPSE_REPORT_STATS: "no"
+      SYNAPSE_REGISTRATION_SHARED_SECRET: ${SYNAPSE_REGISTRATION_SHARED_SECRET}
+      MACAROON_SECRET_KEY: ${MACAROON_SECRET_KEY}
+      FORM_SECRET: ${FORM_SECRET}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./config/synapse:/data
+    entrypoint: ["/bin/sh", "/data/start.sh"]
+    networks:
+      - pole-matrix
+    expose:
+      - "8008"
+
+  pole-element-web:
+    image: vectorim/element-web:latest
+    container_name: pole_matrix_element
+    restart: unless-stopped
+    depends_on:
+      - pole-synapse
+    networks:
+      - pole-matrix
+    expose:
+      - "80"
+    volumes:
+      - ./config/element/config.json:/app/config.json:ro
+      - ./config/element/assets:/app/assets:ro
+
+  pole-nginx-front:
+    image: nginx:alpine
+    container_name: pole_matrix_nginx
+    restart: unless-stopped
+    depends_on:
+      - pole-element-web
+      - pole-synapse
+    networks:
+      - pole-matrix
+    ports:
+      - "127.0.0.1:18080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+
+  pole-synapse-admin:
+    image: awesometechnologies/synapse-admin:latest
+    container_name: pole_matrix_admin
+    restart: unless-stopped
+    networks:
+      - pole-matrix
+    expose:
+      - "80"
+
+networks:
+  pole-matrix:
+    driver: bridge
