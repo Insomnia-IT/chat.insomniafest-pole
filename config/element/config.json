@@ -1,7 +1,7 @@
 {
   "default_server_config": {
     "m.homeserver": {
-      "base_url": "https://pole.insomniafest.ru",
+      "base_url": "https://pole.insomniafest.ru:17234",
       "server_name": "pole.insomniafest.ru"
     }
   },

@@ -62,7 +62,8 @@ services:
     networks:
       - pole-matrix
     ports:
-      - "127.0.0.1:18080:80"
+      - "17233:80"
+      - "17234:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/html:/usr/share/nginx/html:ro
