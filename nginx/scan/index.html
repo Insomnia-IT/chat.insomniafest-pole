@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Badge Scanner</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #050509;
+            color: #f2f4fa;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .frame {
+            width: 240px;
+            height: 240px;
+            border: 2px solid rgba(27, 231, 145, 0.8);
+            border-radius: 12px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45), 0 0 22px rgba(27, 231, 145, 0.35);
+        }
+
+        .status {
+            position: fixed;
+            left: 16px;
+            right: 16px;
+            bottom: 18px;
+            text-align: center;
+            font-size: 14px;
+            letter-spacing: 0.02em;
+            color: rgba(255, 255, 255, 0.88);
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+        }
+
+        .result {
+            position: fixed;
+            inset: auto 12px 12px;
+            border: 1px solid #2d3958;
+            border-radius: 12px;
+            background: rgba(13, 17, 31, 0.95);
+            padding: 14px;
+            pointer-events: auto;
+            display: none;
+        }
+
+        .result.visible {
+            display: block;
+        }
+
+        .title {
+            margin: 0 0 10px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .row {
+            margin-top: 8px;
+        }
+
+        .label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #8b96b8;
+            margin-bottom: 4px;
+        }
+
+        .value-wrap {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .value {
+            flex: 1;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid #303c5e;
+            background: #0a0f20;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        button {
+            border: 1px solid #415182;
+            border-radius: 8px;
+            background: #13203f;
+            color: #e8edff;
+            padding: 8px 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .actions {
+            margin-top: 12px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .error {
+            color: #ff9c9c;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+<body>
+<video id="video" playsinline autoplay muted></video>
+
+<div class="overlay">
+    <div class="frame"></div>
+</div>
+
+<div id="status" class="status">Starting camera…</div>
+
+<div id="result" class="result" role="dialog" aria-live="polite">
+    <h2 class="title">Credentials</h2>
+
+    <div class="row">
+        <div class="label">Username</div>
+        <div class="value-wrap">
+            <div id="username" class="value"></div>
+            <button type="button" data-copy-target="username">Copy</button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="label">Temporary password</div>
+        <div class="value-wrap">
+            <div id="tempPassword" class="value"></div>
+            <button type="button" data-copy-target="tempPassword">Copy</button>
+        </div>
+    </div>
+
+    <div id="error" class="error" hidden></div>
+
+    <div class="actions">
+        <button id="scanAgainBtn" type="button">Scan next</button>
+    </div>
+</div>
+
+<script>
+    const CODE_REGEX = /^[0-9a-f]{32}$/i;
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const usernameEl = document.getElementById('username');
+    const tempPasswordEl = document.getElementById('tempPassword');
+    const errorEl = document.getElementById('error');
+    const scanAgainBtn = document.getElementById('scanAgainBtn');
+    const video = document.getElementById('video');
+
+    let stream;
+    let detector;
+    let scanTimer;
+    let isBusy = false;
+
+    async function init() {
+        if (!('BarcodeDetector' in window)) {
+            statusEl.textContent = 'BarcodeDetector API is not available in this browser.';
+            return;
+        }
+
+        detector = new BarcodeDetector({ formats: ['qr_code'] });
+        bindCopyButtons();
+        scanAgainBtn.addEventListener('click', restartScan);
+        await startCamera();
+    }
+
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+            });
+            video.srcObject = stream;
+            await video.play();
+            startScannerLoop();
+            statusEl.textContent = 'Point camera at badge QR code';
+        } catch (error) {
+            statusEl.textContent = 'Camera permission is required.';
+        }
+    }
+
+    function startScannerLoop() {
+        stopScannerLoop();
+        scanTimer = setInterval(scanFrame, 240);
+    }
+
+    function stopScannerLoop() {
+        if (scanTimer) {
+            clearInterval(scanTimer);
+            scanTimer = null;
+        }
+    }
+
+    async function scanFrame() {
+        if (isBusy) {
+            return;
+        }
+        try {
+            const found = await detector.detect(video);
+            if (!found.length) {
+                return;
+            }
+
+            const rawValue = (found[0].rawValue || '').trim();
+            if (!CODE_REGEX.test(rawValue)) {
+                statusEl.textContent = 'Invalid code format, expected 32 hex chars';
+                return;
+            }
+
+            isBusy = true;
+            stopScannerLoop();
+            statusEl.textContent = 'Fetching credentials…';
+            await fetchCredentials(rawValue.toLowerCase());
+        } catch (_) {
+        }
+    }
+
+    async function fetchCredentials(code) {
+        try {
+            const response = await fetch('/reg/credentials', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code })
+            });
+
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || ('Request failed with HTTP ' + response.status));
+            }
+
+            showResult(payload.username, payload.tempPassword, null);
+            statusEl.textContent = 'Credentials ready';
+        } catch (error) {
+            showResult('', '', error.message);
+            statusEl.textContent = 'Request failed';
+        } finally {
+            isBusy = false;
+        }
+    }
+
+    function showResult(username, tempPassword, errorText) {
+        usernameEl.textContent = username || '-';
+        tempPasswordEl.textContent = tempPassword || '-';
+        errorEl.hidden = !errorText;
+        errorEl.textContent = errorText || '';
+        resultEl.classList.add('visible');
+    }
+
+    function restartScan() {
+        resultEl.classList.remove('visible');
+        errorEl.hidden = true;
+        statusEl.textContent = 'Point camera at badge QR code';
+        startScannerLoop();
+    }
+
+    function bindCopyButtons() {
+        document.querySelectorAll('button[data-copy-target]').forEach(function (button) {
+            button.addEventListener('click', async function () {
+                const targetId = button.getAttribute('data-copy-target');
+                const value = (document.getElementById(targetId)?.textContent || '').trim();
+                if (!value || value === '-') {
+                    return;
+                }
+
+                await copyText(value);
+                const original = button.textContent;
+                button.textContent = 'Copied';
+                setTimeout(function () {
+                    button.textContent = original;
+                }, 900);
+            });
+        });
+    }
+
+    async function copyText(value) {
+        try {
+            await navigator.clipboard.writeText(value);
+        } catch (_) {
+            const tempInput = document.createElement('textarea');
+            tempInput.value = value;
+            tempInput.style.position = 'fixed';
+            tempInput.style.opacity = '0';
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+        }
+    }
+
+    init();
+</script>
+</body>
+</html>
