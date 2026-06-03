@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Бессонный Чат</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 2rem 1rem 3rem;
+            color: #f5f5f5;
+            background: radial-gradient(circle at top, #10152b 0, #050712 60%, #020208 100%);
+            background: #000 url(matrix-eye.png) center no-repeat;
+            background-attachment: fixed;
+            text-align: center;
+        }
+        .wrapper {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        header {
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        header img {
+            width: 120px;
+            border-radius: 10%;
+        }
+        h1 {
+            font-size: 2rem;
+            margin: 0 0 0.5rem;
+        }
+        h2 {
+            margin: 1.5rem 0;
+            font-size: 2rem;
+        }
+        h3 {
+            margin: 1rem 0 0.5rem;
+            font-size: 1.05rem;
+        }
+        p {
+            margin: 0.4rem 0;
+        }
+        ul {
+            margin: 0.4rem 0 0.8rem;
+            padding-left: 1.2rem;
+        }
+        li {
+            margin: 0.25rem 0;
+        }
+        .card {
+            background: rgba(9, 12, 28, 0.95);
+            border-radius: 16px;
+            padding: 1.5rem 1.3rem;
+            margin-top: 1.1rem;
+            border: 1px solid rgba(88, 101, 242, 0.15);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+            text-align: center;
+        }
+        .step-badge {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #0dbd8b;
+            margin-bottom: 0.2rem;
+        }
+        .step-badge .num {
+            font-size: 1.6rem;
+            font-weight: 800;
+        }
+        .buttons {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.3rem;
+            border-radius: 999px;
+            text-decoration: none;
+            border: 1px solid #2f364f;
+            color: #f5f5f5;
+            font-size: 0.95rem;
+            white-space: nowrap;
+            background: transparent;
+            transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+        .btn.primary {
+            background: #0dbd8b;
+            border-color: #0dbd8b;
+            color: #020308;
+            font-weight: 600;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+            border-color: #4b54ff;
+        }
+        .btn.primary:hover {
+            background: #13d79f;
+        }
+        .note {
+            font-size: 0.88rem;
+            opacity: 0.82;
+            margin-top: 0.5rem;
+        }
+        ol {
+            margin: 0.3rem 0 0.5rem;
+            padding-left: 0;
+            list-style-position: inside;
+        }
+        ol li {
+            margin-bottom: 0.35rem;
+        }
+        code {
+            background: #1a1f33;
+            padding: 0.08rem 0.25rem;
+            border-radius: 4px;
+            font-size: 0.88em;
+        }
+        .copy-url {
+            margin-top: 0.75rem;
+            padding: 0.8rem 1.1rem;
+            border: 1px solid #3f4a78;
+            background: #121a38;
+            color: #f5f5f5;
+            border-radius: 12px;
+            font-size: 1.15rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+        .copy-url:hover {
+            transform: translateY(-1px);
+            border-color: #0dbd8b;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        }
+        .copy-url code {
+            font-size: 1em;
+            background: transparent;
+            padding: 0;
+        }
+        .copy-url.copied {
+            border-color: #0dbd8b;
+            color: #0dbd8b;
+        }
+        .copy-url-hint {
+            margin-top: 0.45rem;
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+        footer {
+            margin-top: 1.8rem;
+            font-size: 0.8rem;
+            opacity: 0.75;
+        }
+    </style>
+</head>
+<body>
+<div class="wrapper">
+    <header>
+        <div>
+            <img src="besson.jpg" />
+        </div>
+        <div>
+            <h1>Бессонный Чат</h1>
+            <p>Мессенджер для волонтеров Бессонницы. Работает без интернета!</p>
+        </div>
+    </header>
+
+    <div class="card">
+        <div class="step-badge">
+            <span class="num">1</span>
+        </div>
+        <h2>Отсканируй свой бейдж для регистрации</h2>
+        <a class="btn primary" href="/apps/element.apk">Сканировать</a>
+    </div>
+
+    <div class="card">
+        <div class="step-badge">
+            <span class="num">2</span>
+        </div>
+        <h2>Скачай приложение Element или используй <a href="https://chat.insomniafest.ru">веб-версию</a></h2>
+        <p>(iOS, увы, в пролете, пробуй браузерную версию):</p>
+        <div class="buttons">
+            <a class="btn" href="/apps/element.apk">Android</a>
+            <a class="btn" href="/apps/Element.exe">Windows</a>
+            <a class="btn" href="/apps/Element.dmg">macOS</a>
+            <a class="btn" href="/apps/element-desktop-linux-x86_64.tar.gz">Linux (x86-64)</a>
+            <a class="btn" href="/apps/element-desktop-linux-arm64.tar.gz">Linux (arm)</a>
+        </div>
+        <p class="note">
+            На Android включите установку из неизвестных источников и откройте файл
+            <code>element.apk</code>.
+        </p>
+        <p class="note">
+            На телефоне, если браузер пишет, что «десктопная версия не поддерживается», включите
+            «Версия для ПК» / «Request desktop site» в меню браузера.  Веб-интерфейс Element будет
+            работать внутри локальной сети.
+        </p>
+    </div>
+
+    <div class="card">
+        <div class="step-badge">
+            <span class="num">3</span>
+        </div>
+        <h2>Подключить приложение к серверу</h2>
+        <p>Во всех приложениях и в веб-версии обязательно нужно указать вот этот адрес сервера (homeserver). Иначе ничего не получится!</p>
+        <button class="copy-url" type="button" data-copy="pole.insomniafest.ru">
+            <code>pole.insomniafest.ru</code>
+        </button>
+        <p class="copy-url-hint">Нажми, чтобы скопировать адрес</p>
+    </div>
+
+</div>
+<script>
+    document.querySelectorAll('.copy-url').forEach(function (button) {
+        button.addEventListener('click', async function () {
+            const text = button.getAttribute('data-copy') || '';
+            if (!text) {
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch (error) {
+                const hiddenInput = document.createElement('input');
+                hiddenInput.value = text;
+                document.body.appendChild(hiddenInput);
+                hiddenInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(hiddenInput);
+            }
+
+            const original = button.innerHTML;
+            button.classList.add('copied');
+            button.textContent = 'Скопировано';
+            setTimeout(function () {
+                button.classList.remove('copied');
+                button.innerHTML = original;
+            }, 1100);
+        });
+    });
+</script>
+</body>
+</html>

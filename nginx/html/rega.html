@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>BADGE·IN</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0A0A0A;
+  --surface:#141414;
+  --surface2:#1E1E1E;
+  --border:#2A2A2A;
+  --text:#F0F0F0;
+  --muted:#666;
+  --hint:#444;
+  --accent:#D4FF00;
+  --accent-dim:#A8CC00;
+  --success:#00E87A;
+  --warn:#FFB300;
+  --error:#FF4444;
+  --mono:'Courier New',Courier,monospace;
+}
+
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden;-webkit-tap-highlight-color:transparent}
+
+.screen{position:fixed;inset:0;display:flex;flex-direction:column;transition:opacity .25s,transform .25s;will-change:transform,opacity}
+.screen.hidden{opacity:0;pointer-events:none;transform:translateY(12px)}
+
+/* ── CONFIG SCREEN ─────────────────────────────────────── */
+#cfg{padding:28px 24px 40px;overflow-y:auto;gap:0}
+
+.logo{font-size:32px;font-weight:900;letter-spacing:-1.5px;color:var(--accent);line-height:1;margin-bottom:4px}
+.logo span{color:var(--muted)}
+.tagline{font-size:12px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:32px}
+
+.field{margin-bottom:18px}
+.field label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:7px}
+.field input{
+  width:100%;background:var(--surface);border:1px solid var(--border);
+  color:var(--text);padding:13px 14px;font-size:15px;
+  font-family:var(--mono);border-radius:6px;outline:none;
+  transition:border-color .15s;-webkit-appearance:none;appearance:none
+}
+.field input:focus{border-color:var(--accent)}
+.field input::placeholder{color:var(--hint)}
+.field .hint{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4}
+
+.divider{height:1px;background:var(--border);margin:24px 0}
+
+.btn{
+  display:block;width:100%;border:none;padding:16px;
+  font-size:14px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.08em;border-radius:6px;cursor:pointer;transition:opacity .1s,transform .1s
+}
+.btn:active{transform:scale(.98);opacity:.9}
+.btn-primary{background:var(--accent);color:#000;margin-top:8px}
+.btn-secondary{background:var(--surface2);color:var(--muted);border:1px solid var(--border);margin-top:10px}
+
+.cfg-note{font-size:11px;color:var(--muted);line-height:1.6;margin-top:20px;padding:14px;background:var(--surface);border-radius:6px;border-left:3px solid var(--border)}
+.cfg-note strong{color:var(--text)}
+
+/* ── SCANNER SCREEN ────────────────────────────────────── */
+#scan{background:#000}
+
+#video{width:100%;height:100%;object-fit:cover}
+
+.scan-ui{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+
+.scan-header{position:absolute;top:0;left:0;right:0;padding:20px 20px 0;display:flex;align-items:center;justify-content:space-between}
+.scan-logo{font-size:20px;font-weight:900;letter-spacing:-1px;color:var(--accent)}
+.scan-logo span{color:rgba(255,255,255,.3)}
+.scan-count{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);background:rgba(0,0,0,.5);padding:6px 12px;border-radius:20px;border:1px solid rgba(212,255,0,.2)}
+
+.frame{width:230px;height:230px;position:relative}
+.frame-corner{position:absolute;width:36px;height:36px;border:3px solid var(--accent)}
+.fc-tl{top:0;left:0;border-width:3px 0 0 3px;border-radius:3px 0 0 0}
+.fc-tr{top:0;right:0;border-width:3px 3px 0 0;border-radius:0 3px 0 0}
+.fc-bl{bottom:0;left:0;border-width:0 0 3px 3px;border-radius:0 0 0 3px}
+.fc-br{bottom:0;right:0;border-width:0 3px 3px 0;border-radius:0 0 3px 0}
+.scan-line{
+  position:absolute;top:4px;left:4px;right:4px;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  animation:scanline 2.2s ease-in-out infinite
+}
+@keyframes scanline{0%,100%{top:4px;opacity:0}10%,90%{opacity:1}50%{top:calc(100% - 6px)}}
+
+.scan-hint{position:absolute;bottom:90px;left:0;right:0;text-align:center;font-size:13px;color:rgba(255,255,255,.45);letter-spacing:.02em}
+.scan-status{position:absolute;bottom:56px;left:0;right:0;text-align:center;font-size:12px;font-family:var(--mono);color:rgba(255,255,255,.3)}
+
+.settings-btn{
+  position:absolute;bottom:24px;right:24px;
+  width:44px;height:44px;border-radius:50%;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+  color:rgba(255,255,255,.5);font-size:20px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;pointer-events:all;
+  transition:background .15s
+}
+.settings-btn:active{background:rgba(255,255,255,.15)}
+
+/* ── RESULT SCREEN ─────────────────────────────────────── */
+#result{padding:32px 24px 40px;justify-content:center;gap:12px;overflow-y:auto}
+
+.result-icon{font-size:52px;text-align:center;line-height:1;margin-bottom:4px}
+.result-title{font-size:28px;font-weight:900;letter-spacing:-1px;text-align:center}
+.result-title.ok{color:var(--success)}
+.result-title.warn{color:var(--warn)}
+.result-title.err{color:var(--error)}
+
+.cred-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-top:6px}
+.cred-row{padding:14px 16px;border-bottom:1px solid var(--border)}
+.cred-row:last-child{border-bottom:none}
+.cred-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:5px;font-weight:700}
+.cred-val{font-family:var(--mono);font-size:13px;color:var(--text);word-break:break-all;display:flex;align-items:flex-start;gap:10px}
+.cred-val span{flex:1;line-height:1.5}
+.copy-btn{
+  flex-shrink:0;background:var(--surface2);border:1px solid var(--border);
+  color:var(--muted);padding:4px 9px;border-radius:4px;font-size:10px;
+  font-weight:700;letter-spacing:.05em;cursor:pointer;text-transform:uppercase;
+  transition:background .1s,color .1s;white-space:nowrap;margin-top:1px
+}
+.copy-btn:active,.copy-btn.copied{background:var(--accent);color:#000;border-color:var(--accent)}
+
+.result-msg{font-size:13px;color:var(--muted);text-align:center;line-height:1.6;padding:0 8px}
+
+.badge-note{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:6px;padding:12px 14px;font-size:12px;color:var(--muted);line-height:1.5}
+.badge-note strong{color:var(--text)}
+
+/* ── PROCESSING OVERLAY ────────────────────────────────── */
+#proc{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:50;transition:opacity .2s}
+#proc.hidden{opacity:0;pointer-events:none}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.proc-text{font-size:13px;color:var(--muted);font-family:var(--mono)}
+
+/* ── NO SUPPORT ────────────────────────────────────────── */
+#nosupport{align-items:center;justify-content:center;text-align:center;padding:40px 32px;gap:16px}
+.nosupport-icon{font-size:48px}
+.nosupport-title{font-size:22px;font-weight:700;color:var(--error)}
+.nosupport-body{font-size:14px;color:var(--muted);line-height:1.7;max-width:300px}
+.nosupport-body strong{color:var(--text)}
+</style>
+</head>
+<body>
+
+<!-- CONFIG SCREEN -->
+<div id="cfg" class="screen">
+  <div class="logo">BADGE<span>·</span>IN</div>
+  <div class="tagline">Festival volunteer registration</div>
+
+  <div class="field">
+    <label>Matrix Server URL</label>
+    <input type="url" id="f-url" placeholder="http://192.168.1.100:8008" autocomplete="off" spellcheck="false" inputmode="url">
+    <div class="hint">Local IP address of your Synapse server including port</div>
+  </div>
+
+  <div class="field">
+    <label>Homeserver Name</label>
+    <input type="text" id="f-hs" placeholder="festival.local" autocomplete="off" spellcheck="false">
+    <div class="hint">Value of <code>server_name</code> in homeserver.yaml</div>
+  </div>
+
+  <div class="field">
+    <label>Registration Shared Secret</label>
+    <input type="password" id="f-secret" placeholder="••••••••••••••••" autocomplete="off">
+    <div class="hint">Value of <code>registration_shared_secret</code> in homeserver.yaml</div>
+  </div>
+
+  <button class="btn btn-primary" onclick="saveConfig()">Start Scanning</button>
+  <button class="btn btn-secondary" id="btn-back" style="display:none" onclick="goScan()">← Back to Scanner</button>
+
+  <div class="divider"></div>
+
+  <div class="cfg-note">
+    <strong>How it works</strong><br>
+    Each badge QR code (a 32-char hex ID) becomes the volunteer's Matrix username and password.
+    They log into Element with <strong>@&lt;id&gt;:&lt;homeserver&gt;</strong> and their badge code as the password.
+    Credentials are shown after each scan.
+  </div>
+</div>
+
+<!-- SCANNER SCREEN -->
+<div id="scan" class="screen hidden">
+  <video id="video" playsinline autoplay muted></video>
+  <div class="scan-ui">
+    <div class="scan-header">
+      <div class="scan-logo">BADGE<span>·IN</span></div>
+      <div class="scan-count" id="counter">0 registered</div>
+    </div>
+    <div class="frame">
+      <div class="frame-corner fc-tl"></div>
+      <div class="frame-corner fc-tr"></div>
+      <div class="frame-corner fc-bl"></div>
+      <div class="frame-corner fc-br"></div>
+      <div class="scan-line"></div>
+    </div>
+    <div class="scan-hint">Point camera at volunteer badge QR code</div>
+    <div class="scan-status" id="scan-status">Initialising camera…</div>
+  </div>
+  <button class="settings-btn" onclick="openSettings()" aria-label="Settings">⚙</button>
+</div>
+
+<!-- RESULT SCREEN -->
+<div id="result" class="screen hidden">
+  <div class="result-icon" id="r-icon"></div>
+  <div class="result-title" id="r-title"></div>
+
+  <div class="cred-box" id="r-creds">
+    <div class="cred-row">
+      <div class="cred-label">Matrix ID</div>
+      <div class="cred-val">
+        <span id="r-mxid"></span>
+        <button class="copy-btn" onclick="copyField('r-mxid',this)">Copy</button>
+      </div>
+    </div>
+    <div class="cred-row">
+      <div class="cred-label">Password</div>
+      <div class="cred-val">
+        <span id="r-pass"></span>
+        <button class="copy-btn" onclick="copyField('r-pass',this)">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="result-msg" id="r-msg"></div>
+
+  <div class="badge-note" id="r-note" style="display:none">
+    <strong>Password tip:</strong> The password is the same code printed on the badge.
+    The volunteer can always retrieve it by looking at their QR code ID.
+  </div>
+
+  <button class="btn btn-primary" onclick="scanNext()">Scan Next Badge</button>
+  <button class="btn btn-secondary" onclick="openSettings()">Settings</button>
+</div>
+
+<!-- NO SUPPORT SCREEN -->
+<div id="nosupport" class="screen hidden">
+  <div class="nosupport-icon">⚠</div>
+  <div class="nosupport-title">Browser not supported</div>
+  <div class="nosupport-body">
+    This app requires the <strong>BarcodeDetector API</strong>.<br><br>
+    Please use <strong>Chrome on Android</strong> or <strong>Safari 17+ on iOS</strong>.
+    Both are available offline once the page is loaded.
+  </div>
+</div>
+
+<!-- PROCESSING OVERLAY -->
+<div id="proc" class="hidden">
+  <div class="spinner"></div>
+  <div class="proc-text" id="proc-text">Registering volunteer…</div>
+</div>
+
+<script>
+const STORE = 'badgein_v1';
+let cfg = {};
+let scanCount = 0;
+let detector = null;
+let stream = null;
+let scanTimer = null;
+let lastCode = null;
+let processing = false;
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+
+async function init() {
+  if (!('BarcodeDetector' in window)) {
+    show('nosupport'); return;
+  }
+
+  const saved = localStorage.getItem(STORE);
+  if (saved) {
+    try { cfg = JSON.parse(saved); } catch(e) { cfg = {}; }
+    if (cfg.url) document.getElementById('f-url').value = cfg.url;
+    if (cfg.hs)  document.getElementById('f-hs').value  = cfg.hs;
+    if (cfg.sec) document.getElementById('f-secret').value = cfg.sec;
+    if (cfg.url && cfg.hs && cfg.sec) {
+      document.getElementById('btn-back').style.display = '';
+      await startScanner();
+      return;
+    }
+  }
+  show('cfg');
+}
+
+// ── Config ─────────────────────────────────────────────────────────────────
+
+function saveConfig() {
+  const url = document.getElementById('f-url').value.trim().replace(/\/+$/, '');
+  const hs  = document.getElementById('f-hs').value.trim();
+  const sec = document.getElementById('f-secret').value.trim();
+
+  if (!url || !hs || !sec) {
+    alert('Please fill in all three fields.'); return;
+  }
+  if (!/^https?:\/\/.+/.test(url)) {
+    alert('Server URL must start with http:// or https://'); return;
+  }
+
+  cfg = { url, hs, sec };
+  localStorage.setItem(STORE, JSON.stringify(cfg));
+  document.getElementById('btn-back').style.display = '';
+  startScanner();
+}
+
+function openSettings() {
+  stopScanner();
+  show('cfg');
+}
+
+function goScan() {
+  startScanner();
+}
+
+// ── Scanner ────────────────────────────────────────────────────────────────
+
+async function startScanner() {
+  show('scan');
+  setStatus('Starting camera…');
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+    const vid = document.getElementById('video');
+    vid.srcObject = stream;
+    await vid.play();
+
+    detector = new BarcodeDetector({ formats: ['qr_code'] });
+    setStatus('Ready — point at a badge');
+
+    scanTimer = setInterval(async () => {
+      if (processing) return;
+      try {
+        const found = await detector.detect(vid);
+        if (!found.length) return;
+        const raw = found[0].rawValue.trim();
+        if (isValidId(raw) && raw !== lastCode) {
+          lastCode = raw;
+          await register(raw);
+        } else if (found.length && !isValidId(found[0].rawValue.trim())) {
+          setStatus('Unknown QR code — not a badge');
+        }
+      } catch(_) {}
+    }, 200);
+
+  } catch (e) {
+    setStatus('Camera error');
+    alert('Could not access camera. Please allow camera permission and reload the page.');
+  }
+}
+
+function stopScanner() {
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+  if (stream)    { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  lastCode = null;
+  processing = false;
+}
+
+function isValidId(s) {
+  return /^[0-9a-f]{32}$/i.test(s);
+}
+
+function setStatus(txt) {
+  const el = document.getElementById('scan-status');
+  if (el) el.textContent = txt;
+}
+
+// ── Registration ───────────────────────────────────────────────────────────
+
+async function register(id) {
+  processing = true;
+  showProc('Contacting server…');
+
+  const username = id.toLowerCase();
+  const password = id.toLowerCase();
+
+  try {
+    // 1 · Get nonce
+    showProc('Getting registration nonce…');
+    const nonceRes = await fetch(`${cfg.url}/_synapse/admin/v1/register`, { method: 'GET' });
+    if (!nonceRes.ok) throw new Error(`Server returned HTTP ${nonceRes.status}`);
+    const { nonce } = await nonceRes.json();
+
+    // 2 · Compute HMAC-SHA1 MAC
+    showProc('Computing credentials…');
+    const mac = await hmacSha1(cfg.sec, `${nonce}\x00${username}\x00${password}\x00notadmin`);
+
+    // 3 · Register
+    showProc('Registering volunteer…');
+    const regRes = await fetch(`${cfg.url}/_synapse/admin/v1/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nonce,
+        username,
+        password,
+        mac,
+        admin: false,
+        displayname: `VOL-${username.slice(-6).toUpperCase()}`
+      })
+    });
+    const body = await regRes.json();
+    hideProc();
+
+    if (regRes.ok) {
+      scanCount++;
+      document.getElementById('counter').textContent = `${scanCount} registered`;
+      showResult('ok', username, password, null);
+    } else if (body.errcode === 'M_USER_IN_USE') {
+      showResult('warn', username, password, null);
+    } else {
+      showResult('err', username, null, body.error || `HTTP ${regRes.status} — ${body.errcode || 'unknown error'}`);
+    }
+
+  } catch (e) {
+    hideProc();
+    showResult('err', id, null, `Network error: ${e.message}`);
+  }
+}
+
+async function hmacSha1(secret, message) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-1' },
+    false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
+  return Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Results ────────────────────────────────────────────────────────────────
+
+function showResult(type, username, password, errMsg) {
+  stopScanner();
+  show('result');
+
+  const icons  = { ok: '✓', warn: '↩', err: '✗' };
+  const titles = { ok: 'Registered!', warn: 'Already Registered', err: 'Registration Failed' };
+  const msgs   = {
+    ok:   'Volunteer is registered. Show them the credentials below to log into Element.',
+    warn: 'This badge was already registered. Credentials remain unchanged — show them below.',
+    err:  errMsg
+  };
+
+  document.getElementById('r-icon').textContent  = icons[type];
+  document.getElementById('r-title').textContent = titles[type];
+  document.getElementById('r-title').className   = `result-title ${type}`;
+  document.getElementById('r-msg').textContent   = msgs[type];
+
+  const showCreds = type !== 'err';
+  document.getElementById('r-creds').style.display = showCreds ? '' : 'none';
+  document.getElementById('r-note').style.display  = showCreds ? '' : 'none';
+
+  if (showCreds) {
+    document.getElementById('r-mxid').textContent = `@${username}:${cfg.hs}`;
+    document.getElementById('r-pass').textContent = password || username;
+  }
+}
+
+function scanNext() {
+  lastCode = null;
+  processing = false;
+  startScanner();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function show(id) {
+  ['cfg','scan','result','nosupport'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+function showProc(txt) {
+  document.getElementById('proc-text').textContent = txt;
+  document.getElementById('proc').classList.remove('hidden');
+}
+
+function hideProc() {
+  document.getElementById('proc').classList.add('hidden');
+}
+
+function copyField(id, btn) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).catch(() => {
+    const el = document.createElement('textarea');
+    el.value = text; el.style.position = 'fixed'; el.style.opacity = '0';
+    document.body.appendChild(el); el.select(); document.execCommand('copy');
+    document.body.removeChild(el);
+  });
+  btn.classList.add('copied');
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy'; }, 1800);
+}
+
+init();
+</script>
+</body>
+</html>
