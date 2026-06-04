@@ -50,7 +50,7 @@ services:
       - "80"
     volumes:
       - ./config/element/config.json:/app/config.json:ro
-      - ./config/element/assets:/app/assets:ro
+      - ./nginx/help:/app/assets:ro
 
   pole-reg-api:
     image: node:20-alpine

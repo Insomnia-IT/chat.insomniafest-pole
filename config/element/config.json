@@ -23,7 +23,7 @@
   "default_locale": "ru",
 
   "branding": {
-    "welcome_background_url": "assets/matrix-eye.png",
-    "auth_header_logo_url": "assets/besson.jpg"
+    "welcome_background_url": "/assets/matrix-eye.png",
+    "auth_header_logo_url": "/assets/besson.jpg"
   }
 }
