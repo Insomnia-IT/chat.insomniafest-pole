@@ -121,7 +121,7 @@ app.post('/getUserInfo', async (req, res) => {
 });
 
 async function fetchVolunteerIdByQr(code, requestId) {
-  const url = new URL('/volunteers/', FEED_API_BASE_URL + '/');
+  const url = new URL('volunteers/', FEED_API_BASE_URL + '/');
   url.searchParams.set('qr', code);
 
   const data = await feedRequest(url.toString(), requestId);
@@ -140,7 +140,7 @@ async function fetchVolunteerIdByQr(code, requestId) {
 }
 
 async function fetchVolunteerById(volunteerId, requestId) {
-  const url = new URL(`/volunteers/${volunteerId}`, FEED_API_BASE_URL + '/');
+  const url = new URL(`volunteers/${volunteerId}`, FEED_API_BASE_URL + '/');
   return feedRequest(url.toString(), requestId);
 }
 
@@ -152,19 +152,23 @@ async function feedRequest(url, requestId) {
     }
   });
 
-  const payload = await parseJsonSafe(response);
+  const payload = await parseResponseBody(response);
   if (!response.ok) {
-    const details = payload?.detail || payload?.error || `HTTP ${response.status}`;
+    const details = payload?.json?.detail || payload?.json?.error || payload?.textPreview || `HTTP ${response.status}`;
     logError('feed.request.failed', 'Feed API request failed', {
       requestId,
       url,
       status: response.status,
-      details
+      contentType: payload?.contentType || null,
+      details,
+      bodyPreview: payload?.textPreview || null,
+      authHeaderPresent: Boolean(FEED_API_AUTH),
+      authScheme: extractAuthScheme(FEED_API_AUTH)
     });
     throw new Error(`Feed API request failed: ${details}`);
   }
 
-  return payload;
+  return payload.json;
 }
 
 async function isUsernameAvailable(localpart, requestId) {
@@ -283,6 +287,34 @@ async function parseJsonSafe(response) {
   } catch (_) {
     return {};
   }
+}
+
+async function parseResponseBody(response) {
+  const contentType = response.headers.get('content-type') || '';
+  const text = await response.text();
+  let json = {};
+
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch (_) {
+      json = {};
+    }
+  }
+
+  return {
+    contentType,
+    json,
+    textPreview: text ? text.slice(0, 300) : ''
+  };
+}
+
+function extractAuthScheme(value) {
+  if (!value) {
+    return null;
+  }
+  const firstToken = String(value).trim().split(/\s+/, 1)[0];
+  return firstToken || null;
 }
 
 function generateTempPassword() {
