@@ -6,3 +6,4 @@ data/postgres/*
 config/synapse/homeserver.yaml
 *.key
 *.log
+node_modules/
