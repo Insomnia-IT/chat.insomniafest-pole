@@ -126,7 +126,17 @@ async function fetchVolunteerIdByQr(code, requestId) {
 
   const data = await feedRequest(url.toString(), requestId);
   const results = Array.isArray(data?.results) ? data.results : [];
-  return results[0]?.id || null;
+  const volunteerId = results[0]?.id || null;
+
+  logInfo('feed.lookup.qr_result', 'Результат поиска волонтера по QR', {
+    requestId,
+    url: url.toString(),
+    count: typeof data?.count === 'number' ? data.count : null,
+    resultsLength: results.length,
+    firstResultId: volunteerId
+  });
+
+  return volunteerId;
 }
 
 async function fetchVolunteerById(volunteerId, requestId) {
