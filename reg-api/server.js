@@ -8,7 +8,7 @@ const FEED_API_BASE_URL = process.env.FEED_API_BASE_URL;
 const FEED_API_AUTH = process.env.FEED_API_AUTH;
 const SYNAPSE_URL = process.env.SYNAPSE_URL || 'http://pole-synapse:8008';
 const SYNAPSE_SERVER_NAME = process.env.SYNAPSE_SERVER_NAME || 'pole.insomniafest.ru';
-const SYNAPSE_SHARED_SECRET = process.env.SYNAPSE_REGISTRATION_SHARED_SECRET;
+const SYNAPSE_SHARED_SECRET = normalizeSecret(process.env.SYNAPSE_REGISTRATION_SHARED_SECRET);
 const SYNAPSE_ADMIN_ACCESS_TOKEN = process.env.SYNAPSE_ADMIN_ACCESS_TOKEN;
 const APP_ENV = String(process.env.env || process.env.ENV || 'prod').trim().toLowerCase();
 
@@ -266,10 +266,13 @@ async function createSynapseUser(localpart, password, displayName, requestId, op
 
   const nonce = noncePayload.nonce;
   const adminFlag = 'notadmin';
-  const mac = hmacSha1(
-    SYNAPSE_SHARED_SECRET,
-    `${nonce}\x00${localpart}\x00${password}\x00${adminFlag}`
-  );
+  const mac = buildSynapseRegisterMac({
+    secret: SYNAPSE_SHARED_SECRET,
+    nonce,
+    localpart,
+    password,
+    isAdmin: false
+  });
 
   const createResponse = await fetch(registerUrl, {
     method: 'POST',
@@ -574,8 +577,30 @@ function buildLocalpart(telegram, volunteerId) {
   return { localpart: `user${volunteerId}`, source: 'fallback' };
 }
 
-function hmacSha1(secret, text) {
-  return crypto.createHmac('sha1', secret).update(text).digest('hex');
+function buildSynapseRegisterMac({ secret, nonce, localpart, password, isAdmin }) {
+  const flag = isAdmin ? 'admin' : 'notadmin';
+  const msg = [String(nonce), String(localpart), String(password), flag].join('\x00');
+  return crypto
+    .createHmac('sha1', Buffer.from(String(secret), 'utf8'))
+    .update(Buffer.from(msg, 'utf8'))
+    .digest('hex');
+}
+
+function normalizeSecret(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  // Handle accidental quoting in env files: SECRET="..." or SECRET='...'
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    return raw.slice(1, -1);
+  }
+
+  return raw;
 }
 
 async function parseJsonSafe(response) {
