@@ -42,6 +42,12 @@ if (!SYNAPSE_SHARED_SECRET) {
 app.post('/getUserInfo', async (req, res) => {
   const requestId = req.requestId;
   const code = String(req.body?.code || '').trim().toLowerCase();
+  let firstName = '';
+  let lastName = '';
+  let telegram = '';
+  let userId = null;
+  let usernameInfo = null;
+  let localpart = null;
   if (!CODE_REGEX.test(code)) {
     logWarn('api.getUserInfo.invalid_qr', 'Request rejected: invalid QR format', { requestId, codeLength: code.length });
     return res.status(400).json({
@@ -71,12 +77,12 @@ app.post('/getUserInfo', async (req, res) => {
     }
 
     const volunteer = await fetchVolunteerById(volunteerId, requestId);
-    const firstName = String(volunteer?.first_name || '').trim();
-    const lastName = String(volunteer?.last_name || '').trim();
-    const telegram = String(volunteer?.person?.telegram || '').trim();
-    const usernameInfo = buildLocalpart(telegram, volunteerId);
-    const localpart = usernameInfo.localpart;
-    const userId = `@${localpart}:${SYNAPSE_SERVER_NAME}`;
+    firstName = String(volunteer?.first_name || '').trim();
+    lastName = String(volunteer?.last_name || '').trim();
+    telegram = String(volunteer?.person?.telegram || '').trim();
+    usernameInfo = buildLocalpart(telegram, volunteerId);
+    localpart = usernameInfo.localpart;
+    userId = `@${localpart}:${SYNAPSE_SERVER_NAME}`;
 
     const available = await isUsernameAvailable(localpart, requestId);
     if (!available) {
