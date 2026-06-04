@@ -59,8 +59,8 @@ services:
     env_file:
       - .env
     environment:
-      FEED_API_BASE_URL: ${FEED_API_BASE_URL:-https://feedapp-dev.insomniafest.ru/feedapi/v1}
-      FEED_API_AUTH: ${FEED_API_AUTH:-K-PIN-CODE 1001}
+      FEED_API_BASE_URL: ${FEED_API_BASE_URL}
+      FEED_API_AUTH: ${FEED_API_AUTH}
       SYNAPSE_URL: http://pole-synapse:8008
       SYNAPSE_SERVER_NAME: pole.insomniafest.ru
       SYNAPSE_REGISTRATION_SHARED_SECRET: ${SYNAPSE_REGISTRATION_SHARED_SECRET}
