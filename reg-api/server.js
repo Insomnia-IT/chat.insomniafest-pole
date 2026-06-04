@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const app = express();
 const port = process.env.PORT || 3000;
 const CODE_REGEX = /^[0-9a-f]{32}$/i;
-const FEED_API_BASE_URL = process.env.FEED_API_BASE_URL || 'https://feedapp-dev.insomniafest.ru/feedapi/v1';
+const FEED_API_BASE_URL = process.env.FEED_API_BASE_URL;
 const FEED_API_AUTH = process.env.FEED_API_AUTH;
 const SYNAPSE_URL = process.env.SYNAPSE_URL || 'http://pole-synapse:8008';
 const SYNAPSE_SERVER_NAME = process.env.SYNAPSE_SERVER_NAME || 'pole.insomniafest.ru';
@@ -14,6 +14,21 @@ const APP_ENV = String(process.env.env || process.env.ENV || 'prod').trim().toLo
 app.use(express.json({ limit: '16kb' }));
 app.use((req, res, next) => {
   req.requestId = crypto.randomUUID();
+  const startedAt = Date.now();
+  logInfo('http.request', 'Входящий HTTP запрос', {
+    requestId: req.requestId,
+    method: req.method,
+    path: req.originalUrl
+  });
+  res.on('finish', () => {
+    logInfo('http.response', 'Исходящий HTTP ответ', {
+      requestId: req.requestId,
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      durationMs: Date.now() - startedAt
+    });
+  });
   next();
 });
 
@@ -263,6 +278,15 @@ async function parseJsonSafe(response) {
 function generateTempPassword() {
   return crypto.randomBytes(12).toString('base64url');
 }
+
+app.use((req, res) => {
+  logWarn('http.not_found', 'Маршрут не найден', {
+    requestId: req.requestId,
+    method: req.method,
+    path: req.originalUrl
+  });
+  res.status(404).json({ error: 'Маршрут не найден' });
+});
 
 function logInfo(event, message, meta = {}) {
   log('INFO', event, message, meta);
