@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-mkdir -p ./nginx/html/apps
-cd ./nginx/html/apps
+mkdir -p ./nginx/help/apps
+cd ./nginx/help/apps
 
 wget "https://packages.element.io/desktop/install/linux/glibc-x86-64/element-desktop.tar.gz" \
     -O element-desktop-linux-x86_64.tar.gz
