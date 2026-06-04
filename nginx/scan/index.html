@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-    <title>Badge Scanner</title>
+    <title>Сканер бейджей</title>
     <style>
         * {
             box-sizing: border-box;
@@ -135,31 +135,31 @@
     <div class="frame"></div>
 </div>
 
-<div id="status" class="status">Starting camera…</div>
+<div id="status" class="status">Запуск камеры...</div>
 
 <div id="result" class="result" role="dialog" aria-live="polite">
-    <h2 class="title">Credentials</h2>
+    <h2 class="title">Данные для входа</h2>
 
     <div class="row">
-        <div class="label">Username</div>
+        <div class="label">Имя пользователя</div>
         <div class="value-wrap">
             <div id="username" class="value"></div>
-            <button type="button" data-copy-target="username">Copy</button>
+            <button type="button" data-copy-target="username">Копировать</button>
         </div>
     </div>
 
     <div class="row">
-        <div class="label">Temporary password</div>
+        <div class="label">Временный пароль</div>
         <div class="value-wrap">
             <div id="tempPassword" class="value"></div>
-            <button type="button" data-copy-target="tempPassword">Copy</button>
+            <button type="button" data-copy-target="tempPassword">Копировать</button>
         </div>
     </div>
 
     <div id="error" class="error" hidden></div>
 
     <div class="actions">
-        <button id="scanAgainBtn" type="button">Scan next</button>
+        <button id="scanAgainBtn" type="button">Сканировать следующий</button>
     </div>
 </div>
 
@@ -180,7 +180,7 @@
 
     async function init() {
         if (!('BarcodeDetector' in window)) {
-            statusEl.textContent = 'BarcodeDetector API is not available in this browser.';
+            statusEl.textContent = 'BarcodeDetector API не поддерживается в этом браузере.';
             return;
         }
 
@@ -198,9 +198,9 @@
             video.srcObject = stream;
             await video.play();
             startScannerLoop();
-            statusEl.textContent = 'Point camera at badge QR code';
+            statusEl.textContent = 'Наведите камеру на QR-код бейджа';
         } catch (error) {
-            statusEl.textContent = 'Camera permission is required.';
+            statusEl.textContent = 'Нужен доступ к камере.';
         }
     }
 
@@ -228,13 +228,13 @@
 
             const rawValue = (found[0].rawValue || '').trim();
             if (!CODE_REGEX.test(rawValue)) {
-                statusEl.textContent = 'Invalid code format, expected 32 hex chars';
+                statusEl.textContent = 'Неверный формат кода: ожидается 32 символа hex';
                 return;
             }
 
             isBusy = true;
             stopScannerLoop();
-            statusEl.textContent = 'Fetching credentials…';
+            statusEl.textContent = 'Получаем данные для входа...';
             await fetchCredentials(rawValue.toLowerCase());
         } catch (_) {
         }
@@ -242,7 +242,7 @@
 
     async function fetchCredentials(code) {
         try {
-            const response = await fetch('/reg/credentials', {
+            const response = await fetch('/reg/getUserInfo', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code })
@@ -250,14 +250,14 @@
 
             const payload = await response.json();
             if (!response.ok) {
-                throw new Error(payload.error || ('Request failed with HTTP ' + response.status));
+                throw new Error(payload.error || ('Ошибка запроса: HTTP ' + response.status));
             }
 
             showResult(payload.username, payload.tempPassword, null);
-            statusEl.textContent = 'Credentials ready';
+            statusEl.textContent = 'Данные готовы';
         } catch (error) {
             showResult('', '', error.message);
-            statusEl.textContent = 'Request failed';
+            statusEl.textContent = 'Не удалось выполнить запрос';
         } finally {
             isBusy = false;
         }
@@ -274,7 +274,7 @@
     function restartScan() {
         resultEl.classList.remove('visible');
         errorEl.hidden = true;
-        statusEl.textContent = 'Point camera at badge QR code';
+        statusEl.textContent = 'Наведите камеру на QR-код бейджа';
         startScannerLoop();
     }
 
@@ -289,7 +289,7 @@
 
                 await copyText(value);
                 const original = button.textContent;
-                button.textContent = 'Copied';
+                button.textContent = 'Скопировано';
                 setTimeout(function () {
                     button.textContent = original;
                 }, 900);

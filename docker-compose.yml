@@ -56,6 +56,14 @@ services:
     image: node:20-alpine
     container_name: pole_matrix_reg_api
     restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      FEED_API_BASE_URL: ${FEED_API_BASE_URL:-https://feedapp-dev.insomniafest.ru/feedapi/v1}
+      FEED_API_AUTH: ${FEED_API_AUTH:-K-PIN-CODE 1001}
+      SYNAPSE_URL: http://pole-synapse:8008
+      SYNAPSE_SERVER_NAME: pole.insomniafest.ru
+      SYNAPSE_REGISTRATION_SHARED_SECRET: ${SYNAPSE_REGISTRATION_SHARED_SECRET}
     working_dir: /app
     command: sh -c "npm install --omit=dev && npm start"
     volumes:
