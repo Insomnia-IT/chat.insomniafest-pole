@@ -10,6 +10,7 @@ const SYNAPSE_URL = process.env.SYNAPSE_URL || 'http://pole-synapse:8008';
 const SYNAPSE_SERVER_NAME = process.env.SYNAPSE_SERVER_NAME || 'pole.insomniafest.ru';
 const SYNAPSE_SHARED_SECRET = normalizeSecret(process.env.SYNAPSE_REGISTRATION_SHARED_SECRET);
 const SYNAPSE_ADMIN_ACCESS_TOKEN = process.env.SYNAPSE_ADMIN_ACCESS_TOKEN;
+const GENERAL_ROOM_ALIAS = process.env.SYNAPSE_GENERAL_ROOM_ALIAS || `#general:${SYNAPSE_SERVER_NAME}`;
 const APP_ENV = String(process.env.env || process.env.ENV || 'prod').trim().toLowerCase();
 
 app.use(express.json({ limit: '16kb' }));
@@ -327,6 +328,17 @@ async function syncVolunteerMatrixAccess({ requestId, userId, teams, shouldBeSer
     return;
   }
 
+  const generalRoomId = await ensureRoomByAlias(
+    {
+      alias: GENERAL_ROOM_ALIAS,
+      fallbackName: 'General',
+      preset: 'public_chat'
+    },
+    accessToken,
+    requestId
+  );
+  await forceJoinUserToRoom(userId, generalRoomId, accessToken, requestId);
+
   if (shouldBeServerAdmin) {
     await ensureServerAdmin(userId, accessToken, requestId);
   }
@@ -378,10 +390,22 @@ async function ensureServerAdmin(userId, accessToken, requestId) {
 }
 
 async function ensureTeamRoom(team, accessToken, requestId) {
-  const roomAlias = `#${team.aliasLocalpart}:${SYNAPSE_SERVER_NAME}`;
+  return ensureRoomByAlias(
+    {
+      alias: `#${team.aliasLocalpart}:${SYNAPSE_SERVER_NAME}`,
+      fallbackName: team.directionName,
+      preset: 'private_chat'
+    },
+    accessToken,
+    requestId
+  );
+}
+
+async function ensureRoomByAlias({ alias, fallbackName, preset }, accessToken, requestId) {
+  const parsed = parseRoomAlias(alias);
 
   const lookup = await synapseRequest(
-    `/_matrix/client/v3/directory/room/${encodeURIComponent(roomAlias)}`,
+    `/_matrix/client/v3/directory/room/${encodeURIComponent(parsed.fullAlias)}`,
     {
       method: 'GET',
       accessToken
@@ -400,10 +424,10 @@ async function ensureTeamRoom(team, accessToken, requestId) {
       method: 'POST',
       accessToken,
       body: {
-        name: team.directionName,
-        room_alias_name: team.aliasLocalpart,
-        preset: 'private_chat',
-        visibility: 'private'
+        name: fallbackName,
+        room_alias_name: parsed.localpart,
+        preset: preset || 'private_chat',
+        visibility: preset === 'public_chat' ? 'public' : 'private'
       }
     },
     requestId,
@@ -417,7 +441,7 @@ async function ensureTeamRoom(team, accessToken, requestId) {
   const createErr = create.payload?.errcode;
   if (create.status === 400 && createErr === 'M_ROOM_IN_USE') {
     const secondLookup = await synapseRequest(
-      `/_matrix/client/v3/directory/room/${encodeURIComponent(roomAlias)}`,
+      `/_matrix/client/v3/directory/room/${encodeURIComponent(parsed.fullAlias)}`,
       {
         method: 'GET',
         accessToken
@@ -427,7 +451,21 @@ async function ensureTeamRoom(team, accessToken, requestId) {
     return secondLookup.payload.room_id;
   }
 
-  throw new Error(`Could not ensure team room for ${team.directionName}`);
+  throw new Error(`Could not ensure room for alias ${parsed.fullAlias}`);
+}
+
+function parseRoomAlias(alias) {
+  const value = String(alias || '').trim();
+  const match = value.match(/^#([^:]+):(.+)$/);
+  if (!match) {
+    throw new Error(`Invalid room alias: ${value}`);
+  }
+
+  return {
+    fullAlias: value,
+    localpart: match[1],
+    domain: match[2]
+  };
 }
 
 async function forceJoinUserToRoom(userId, roomId, accessToken, requestId) {
