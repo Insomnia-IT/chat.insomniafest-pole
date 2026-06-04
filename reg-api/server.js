@@ -93,7 +93,7 @@ app.post('/getUserInfo', async (req, res) => {
         usernameSource: usernameInfo.source
       });
       return res.status(409).json({
-        error: 'Пользователь уже существует в Synapse.',
+        error: 'Пользователь уже зарегистрирован. Если вы забыли пароль (или если кто-то зарегистрировал вас без вашего ведома), обратитесь в штаб для сброса пароля.',
         firstName,
         lastName,
         telegram: telegram || null,
@@ -128,7 +128,7 @@ app.post('/getUserInfo', async (req, res) => {
         usernameSource: usernameInfo.source
       });
       return res.status(409).json({
-        error: 'Пользователь уже существует в Synapse.',
+        error: 'Пользователь уже зарегистрирован. Если вы забыли пароль (или если кто-то зарегистрировал вас без вашего ведома), обратитесь в штаб для сброса пароля.',
         firstName,
         lastName,
         telegram: telegram || null,
