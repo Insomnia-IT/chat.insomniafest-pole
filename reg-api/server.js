@@ -334,6 +334,11 @@ async function syncVolunteerMatrixAccess({ requestId, userId, teams, shouldBeSer
   for (const team of teams) {
     const roomId = await ensureTeamRoom(team, accessToken, requestId);
     await forceJoinUserToRoom(userId, roomId, accessToken, requestId);
+    if (shouldBeServerAdmin) {
+      await ensureRoomAdmin(userId, roomId, accessToken, requestId);
+      continue;
+    }
+
     if (team.isTeamLead) {
       await ensureRoomModerator(userId, roomId, accessToken, requestId);
     }
@@ -438,6 +443,14 @@ async function forceJoinUserToRoom(userId, roomId, accessToken, requestId) {
 }
 
 async function ensureRoomModerator(userId, roomId, accessToken, requestId) {
+  await ensureRoomPowerAtLeast(userId, roomId, accessToken, requestId, 50);
+}
+
+async function ensureRoomAdmin(userId, roomId, accessToken, requestId) {
+  await ensureRoomPowerAtLeast(userId, roomId, accessToken, requestId, 100);
+}
+
+async function ensureRoomPowerAtLeast(userId, roomId, accessToken, requestId, minPower) {
   const statePath = `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.power_levels`;
   const current = await synapseRequest(
     statePath,
@@ -465,11 +478,11 @@ async function ensureRoomModerator(userId, roomId, accessToken, requestId) {
 
   base.users = base.users || {};
   const currentPower = Number(base.users[userId] || 0);
-  if (currentPower >= 50) {
+  if (currentPower >= minPower) {
     return;
   }
 
-  base.users[userId] = 50;
+  base.users[userId] = minPower;
   await synapseRequest(
     statePath,
     {
