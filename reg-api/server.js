@@ -9,7 +9,11 @@ const FEED_API_AUTH = process.env.FEED_API_AUTH;
 const SYNAPSE_URL = process.env.SYNAPSE_URL || 'http://pole-synapse:8008';
 const SYNAPSE_SERVER_NAME = process.env.SYNAPSE_SERVER_NAME || 'pole.insomniafest.ru';
 const SYNAPSE_SHARED_SECRET = process.env.SYNAPSE_REGISTRATION_SHARED_SECRET;
+const SYNAPSE_ADMIN_ACCESS_TOKEN = process.env.SYNAPSE_ADMIN_ACCESS_TOKEN;
+const SYNAPSE_BOT_USERNAME = process.env.SYNAPSE_BOT_USERNAME || 'regbot';
+const SYNAPSE_BOT_PASSWORD = process.env.SYNAPSE_BOT_PASSWORD || null;
 const APP_ENV = String(process.env.env || process.env.ENV || 'prod').trim().toLowerCase();
+let cachedServiceAccessToken = null;
 
 app.use(express.json({ limit: '16kb' }));
 app.use((req, res, next) => {
@@ -80,6 +84,9 @@ app.post('/getUserInfo', async (req, res) => {
     firstName = String(volunteer?.first_name || '').trim();
     lastName = String(volunteer?.last_name || '').trim();
     telegram = String(volunteer?.person?.telegram || '').trim();
+    const engagements = normalizeEngagements(volunteer?.person?.engagements);
+    const teams = buildTeamsFromEngagements(engagements);
+    const shouldBeServerAdmin = engagements.some((e) => e.roleId === 'ORGANIZER' || e.roleId === 'VICE');
     usernameInfo = buildLocalpart(telegram, volunteerId);
     localpart = usernameInfo.localpart;
     userId = `@${localpart}:${SYNAPSE_SERVER_NAME}`;
@@ -92,6 +99,14 @@ app.post('/getUserInfo', async (req, res) => {
         localpart,
         usernameSource: usernameInfo.source
       });
+
+      await syncVolunteerMatrixAccess({
+        requestId,
+        userId,
+        teams,
+        shouldBeServerAdmin
+      });
+
       return res.status(409).json({
         error: 'Пользователь уже зарегистрирован. Если вы забыли пароль (или если кто-то зарегистрировал вас без вашего ведома), обратитесь в штаб для сброса пароля.',
         firstName,
@@ -104,14 +119,23 @@ app.post('/getUserInfo', async (req, res) => {
 
     const tempPassword = generateTempPassword();
     const displayName = buildDisplayName(firstName, lastName);
-    await createSynapseUser(localpart, tempPassword, displayName, requestId);
+    await createSynapseUser(localpart, tempPassword, displayName, shouldBeServerAdmin, requestId);
+
+    await syncVolunteerMatrixAccess({
+      requestId,
+      userId,
+      teams,
+      shouldBeServerAdmin
+    });
 
     logInfo('api.getUserInfo.created', 'Synapse user created', {
       requestId,
       volunteerId,
       localpart,
       usernameSource: usernameInfo.source,
-      displayName
+      displayName,
+      teamsCount: teams.length,
+      shouldBeServerAdmin
     });
 
     return res.json({
@@ -229,7 +253,7 @@ async function isUsernameAvailable(localpart, requestId) {
   return true;
 }
 
-async function createSynapseUser(localpart, password, displayName, requestId) {
+async function createSynapseUser(localpart, password, displayName, isAdmin, requestId, options = {}) {
   const registerUrl = new URL('/_synapse/admin/v1/register', SYNAPSE_URL + '/').toString();
 
   const nonceResponse = await fetch(registerUrl, { method: 'GET' });
@@ -257,14 +281,14 @@ async function createSynapseUser(localpart, password, displayName, requestId) {
       username: localpart,
       password,
       displayname: displayName || undefined,
-      admin: false,
+      admin: Boolean(isAdmin),
       mac
     })
   });
 
   const createPayload = await parseJsonSafe(createResponse);
   if (createResponse.ok) {
-    return;
+    return { created: true };
   }
 
   if (createResponse.status === 400 && createPayload?.errcode === 'M_USER_IN_USE') {
@@ -272,6 +296,9 @@ async function createSynapseUser(localpart, password, displayName, requestId) {
       requestId,
       localpart
     });
+    if (options.allowUserExists) {
+      return { created: false };
+    }
     const err = new Error('User already exists in Synapse.');
     err.code = 'USER_EXISTS';
     throw err;
@@ -285,6 +312,284 @@ async function createSynapseUser(localpart, password, displayName, requestId) {
   });
 
   throw new Error(`Could not create Synapse user: ${createPayload?.error || `HTTP ${createResponse.status}`}`);
+}
+
+async function syncVolunteerMatrixAccess({ requestId, userId, teams, shouldBeServerAdmin }) {
+  const accessToken = await getServiceAccessToken(requestId);
+
+  if (shouldBeServerAdmin) {
+    await ensureServerAdmin(userId, accessToken, requestId);
+  }
+
+  for (const team of teams) {
+    const roomId = await ensureTeamRoom(team, accessToken, requestId);
+    await forceJoinUserToRoom(userId, roomId, accessToken, requestId);
+    if (team.isTeamLead) {
+      await ensureRoomModerator(userId, roomId, accessToken, requestId);
+    }
+  }
+}
+
+async function getServiceAccessToken(requestId) {
+  if (SYNAPSE_ADMIN_ACCESS_TOKEN) {
+    return SYNAPSE_ADMIN_ACCESS_TOKEN;
+  }
+
+  if (cachedServiceAccessToken) {
+    return cachedServiceAccessToken;
+  }
+
+  const botPassword = SYNAPSE_BOT_PASSWORD || deriveBotPassword();
+  await createSynapseUser(
+    SYNAPSE_BOT_USERNAME,
+    botPassword,
+    'Registration Bot',
+    true,
+    requestId,
+    { allowUserExists: true }
+  );
+
+  const loginResponse = await fetch(new URL('/_matrix/client/v3/login', SYNAPSE_URL + '/').toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'm.login.password',
+      identifier: {
+        type: 'm.id.user',
+        user: SYNAPSE_BOT_USERNAME
+      },
+      password: botPassword
+    })
+  });
+
+  const loginPayload = await parseJsonSafe(loginResponse);
+  if (!loginResponse.ok || !loginPayload?.access_token) {
+    throw new Error(`Could not login service admin user: ${loginPayload?.error || `HTTP ${loginResponse.status}`}`);
+  }
+
+  cachedServiceAccessToken = loginPayload.access_token;
+  return cachedServiceAccessToken;
+}
+
+async function ensureServerAdmin(userId, accessToken, requestId) {
+  const response = await synapseRequest(
+    `/_synapse/admin/v2/users/${encodeURIComponent(userId)}`,
+    {
+      method: 'PUT',
+      accessToken,
+      body: { admin: true }
+    },
+    requestId,
+    { 400: 'handled' }
+  );
+
+  if (response.status === 400) {
+    await synapseRequest(
+      `/_synapse/admin/v1/users/${encodeURIComponent(userId)}/admin`,
+      {
+        method: 'PUT',
+        accessToken,
+        body: { admin: true }
+      },
+      requestId
+    );
+  }
+}
+
+async function ensureTeamRoom(team, accessToken, requestId) {
+  const roomAlias = `#${team.aliasLocalpart}:${SYNAPSE_SERVER_NAME}`;
+
+  const lookup = await synapseRequest(
+    `/_matrix/client/v3/directory/room/${encodeURIComponent(roomAlias)}`,
+    {
+      method: 'GET',
+      accessToken
+    },
+    requestId,
+    { 404: 'handled' }
+  );
+
+  if (lookup.status === 200 && lookup.payload?.room_id) {
+    return lookup.payload.room_id;
+  }
+
+  const create = await synapseRequest(
+    '/_matrix/client/v3/createRoom',
+    {
+      method: 'POST',
+      accessToken,
+      body: {
+        name: team.directionName,
+        room_alias_name: team.aliasLocalpart,
+        preset: 'private_chat',
+        visibility: 'private'
+      }
+    },
+    requestId,
+    { 400: 'handled' }
+  );
+
+  if (create.status === 200 && create.payload?.room_id) {
+    return create.payload.room_id;
+  }
+
+  const createErr = create.payload?.errcode;
+  if (create.status === 400 && createErr === 'M_ROOM_IN_USE') {
+    const secondLookup = await synapseRequest(
+      `/_matrix/client/v3/directory/room/${encodeURIComponent(roomAlias)}`,
+      {
+        method: 'GET',
+        accessToken
+      },
+      requestId
+    );
+    return secondLookup.payload.room_id;
+  }
+
+  throw new Error(`Could not ensure team room for ${team.directionName}`);
+}
+
+async function forceJoinUserToRoom(userId, roomId, accessToken, requestId) {
+  await synapseRequest(
+    `/_synapse/admin/v1/join/${encodeURIComponent(roomId)}`,
+    {
+      method: 'POST',
+      accessToken,
+      body: { user_id: userId }
+    },
+    requestId
+  );
+}
+
+async function ensureRoomModerator(userId, roomId, accessToken, requestId) {
+  const statePath = `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/state/m.room.power_levels`;
+  const current = await synapseRequest(
+    statePath,
+    {
+      method: 'GET',
+      accessToken
+    },
+    requestId,
+    { 404: 'handled' }
+  );
+
+  const base = current.status === 200
+    ? current.payload
+    : {
+        users: {},
+        users_default: 0,
+        events: {},
+        events_default: 0,
+        state_default: 50,
+        ban: 50,
+        kick: 50,
+        redact: 50,
+        invite: 0
+      };
+
+  base.users = base.users || {};
+  const currentPower = Number(base.users[userId] || 0);
+  if (currentPower >= 50) {
+    return;
+  }
+
+  base.users[userId] = 50;
+  await synapseRequest(
+    statePath,
+    {
+      method: 'PUT',
+      accessToken,
+      body: base
+    },
+    requestId
+  );
+}
+
+function normalizeEngagements(engagements) {
+  if (!Array.isArray(engagements)) {
+    return [];
+  }
+
+  return engagements
+    .map((item) => ({
+      roleId: String(item?.role?.id || '').trim(),
+      directionId: String(item?.direction?.id || '').trim(),
+      directionName: String(item?.direction?.name || '').trim()
+    }))
+    .filter((item) => item.directionName);
+}
+
+function buildTeamsFromEngagements(engagements) {
+  const teamsByKey = new Map();
+
+  for (const item of engagements) {
+    const key = item.directionId || item.directionName;
+    if (!teamsByKey.has(key)) {
+      teamsByKey.set(key, {
+        directionId: item.directionId || null,
+        directionName: item.directionName,
+        isTeamLead: false,
+        aliasLocalpart: makeTeamAliasLocalpart(item.directionName, item.directionId)
+      });
+    }
+    const team = teamsByKey.get(key);
+    if (item.roleId === 'TEAM_LEAD') {
+      team.isTeamLead = true;
+    }
+  }
+
+  return Array.from(teamsByKey.values());
+}
+
+function makeTeamAliasLocalpart(directionName, directionId) {
+  const slug = String(directionName || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  const safeSlug = slug || 'team';
+  const suffixSource = String(directionId || directionName || 'team');
+  const suffix = crypto.createHash('sha1').update(suffixSource).digest('hex').slice(0, 8);
+  return `team-${safeSlug}-${suffix}`.slice(0, 120);
+}
+
+async function synapseRequest(path, options, requestId, handledStatuses = {}) {
+  const url = new URL(path, SYNAPSE_URL + '/').toString();
+  const response = await fetch(url, {
+    method: options.method || 'GET',
+    headers: {
+      Authorization: `Bearer ${options.accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+
+  const payload = await parseResponseBody(response);
+  if (!response.ok && !handledStatuses[response.status]) {
+    const details = payload?.json?.error || payload?.json?.errcode || payload?.textPreview || `HTTP ${response.status}`;
+    logError('synapse.request.failed', 'Synapse request failed', {
+      requestId,
+      path,
+      status: response.status,
+      details
+    });
+    throw new Error(`Synapse request failed (${path}): ${details}`);
+  }
+
+  return {
+    status: response.status,
+    payload: payload.json
+  };
+}
+
+function deriveBotPassword() {
+  return crypto
+    .createHash('sha256')
+    .update(`${SYNAPSE_SHARED_SECRET}:${SYNAPSE_SERVER_NAME}:regbot`)
+    .digest('hex')
+    .slice(0, 32);
 }
 
 function buildLocalpart(telegram, volunteerId) {
