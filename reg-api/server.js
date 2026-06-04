@@ -103,13 +103,15 @@ app.post('/getUserInfo', async (req, res) => {
     }
 
     const tempPassword = generateTempPassword();
-    await createSynapseUser(localpart, tempPassword, requestId);
+    const displayName = buildDisplayName(firstName, lastName);
+    await createSynapseUser(localpart, tempPassword, displayName, requestId);
 
     logInfo('api.getUserInfo.created', 'Synapse user created', {
       requestId,
       volunteerId,
       localpart,
-      usernameSource: usernameInfo.source
+      usernameSource: usernameInfo.source,
+      displayName
     });
 
     return res.json({
@@ -227,7 +229,7 @@ async function isUsernameAvailable(localpart, requestId) {
   return true;
 }
 
-async function createSynapseUser(localpart, password, requestId) {
+async function createSynapseUser(localpart, password, displayName, requestId) {
   const registerUrl = new URL('/_synapse/admin/v1/register', SYNAPSE_URL + '/').toString();
 
   const nonceResponse = await fetch(registerUrl, { method: 'GET' });
@@ -254,6 +256,7 @@ async function createSynapseUser(localpart, password, requestId) {
       nonce,
       username: localpart,
       password,
+      displayname: displayName || undefined,
       admin: false,
       mac
     })
@@ -343,6 +346,12 @@ function extractAuthScheme(value) {
 
 function generateTempPassword() {
   return crypto.randomBytes(12).toString('base64url');
+}
+
+function buildDisplayName(firstName, lastName) {
+  return [String(firstName || '').trim(), String(lastName || '').trim()]
+    .filter(Boolean)
+    .join(' ');
 }
 
 app.use((req, res) => {
