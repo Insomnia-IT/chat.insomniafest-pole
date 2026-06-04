@@ -33,31 +33,31 @@ app.use((req, res, next) => {
 });
 
 if (!FEED_API_AUTH) {
-  logWarn('startup.config', 'FEED_API_AUTH не задан');
+  logWarn('startup.config', 'FEED_API_AUTH is not configured');
 }
 if (!SYNAPSE_SHARED_SECRET) {
-  logWarn('startup.config', 'SYNAPSE_REGISTRATION_SHARED_SECRET не задан');
+  logWarn('startup.config', 'SYNAPSE_REGISTRATION_SHARED_SECRET is not configured');
 }
 
 app.post('/getUserInfo', async (req, res) => {
   const requestId = req.requestId;
   const code = String(req.body?.code || '').trim().toLowerCase();
   if (!CODE_REGEX.test(code)) {
-    logWarn('api.getUserInfo.invalid_qr', 'Отклонен запрос с неверным форматом QR', { requestId, codeLength: code.length });
+    logWarn('api.getUserInfo.invalid_qr', 'Request rejected: invalid QR format', { requestId, codeLength: code.length });
     return res.status(400).json({
       error: 'Неверный формат QR-кода. Ожидается 32 шестнадцатеричных символа.'
     });
   }
 
   if (!FEED_API_AUTH) {
-    logError('api.getUserInfo.config', 'Не задан FEED_API_AUTH', { requestId });
+    logError('api.getUserInfo.config', 'FEED_API_AUTH is missing', { requestId });
     return res.status(500).json({
       error: 'Не задана конфигурация FEED_API_AUTH на сервере.'
     });
   }
 
   if (!SYNAPSE_SHARED_SECRET) {
-    logError('api.getUserInfo.config', 'Не задан SYNAPSE_REGISTRATION_SHARED_SECRET', { requestId });
+    logError('api.getUserInfo.config', 'SYNAPSE_REGISTRATION_SHARED_SECRET is missing', { requestId });
     return res.status(500).json({
       error: 'Не задана конфигурация SYNAPSE_REGISTRATION_SHARED_SECRET на сервере.'
     });
@@ -66,7 +66,7 @@ app.post('/getUserInfo', async (req, res) => {
   try {
     const volunteerId = await fetchVolunteerIdByQr(code, requestId);
     if (!volunteerId) {
-      logWarn('api.getUserInfo.not_found', 'Волонтер не найден по QR', { requestId, code });
+      logWarn('api.getUserInfo.not_found', 'Volunteer not found by QR', { requestId, code });
       return res.status(404).json({ error: 'Волонтер с таким QR-кодом не найден.' });
     }
 
@@ -80,7 +80,7 @@ app.post('/getUserInfo', async (req, res) => {
 
     const available = await isUsernameAvailable(localpart, requestId);
     if (!available) {
-      logWarn('api.getUserInfo.user_exists', 'Пользователь уже существует в Synapse', {
+      logWarn('api.getUserInfo.user_exists', 'User already exists in Synapse', {
         requestId,
         volunteerId,
         localpart,
@@ -99,7 +99,7 @@ app.post('/getUserInfo', async (req, res) => {
     const tempPassword = generateTempPassword();
     await createSynapseUser(localpart, tempPassword, requestId);
 
-    logInfo('api.getUserInfo.created', 'Создан пользователь Synapse', {
+    logInfo('api.getUserInfo.created', 'Synapse user created', {
       requestId,
       volunteerId,
       localpart,
@@ -116,7 +116,7 @@ app.post('/getUserInfo', async (req, res) => {
     });
   } catch (error) {
     logError('api.getUserInfo.failed', error.message, { requestId, stack: error.stack });
-    return res.status(502).json({ error: error.message || 'Непредвиденная ошибка сервера.' });
+    return res.status(502).json({ error: 'Ошибка при обработке запроса. Попробуйте еще раз.' });
   }
 });
 
@@ -128,7 +128,7 @@ async function fetchVolunteerIdByQr(code, requestId) {
   const results = Array.isArray(data?.results) ? data.results : [];
   const volunteerId = results[0]?.id || null;
 
-  logInfo('feed.lookup.qr_result', 'Результат поиска волонтера по QR', {
+  logInfo('feed.lookup.qr_result', 'Volunteer lookup by QR result', {
     requestId,
     url: url.toString(),
     count: typeof data?.count === 'number' ? data.count : null,
@@ -155,13 +155,13 @@ async function feedRequest(url, requestId) {
   const payload = await parseJsonSafe(response);
   if (!response.ok) {
     const details = payload?.detail || payload?.error || `HTTP ${response.status}`;
-    logError('feed.request.failed', 'Ошибка запроса к Feed API', {
+    logError('feed.request.failed', 'Feed API request failed', {
       requestId,
       url,
       status: response.status,
       details
     });
-    throw new Error(`Ошибка запроса к Feed API: ${details}`);
+    throw new Error(`Feed API request failed: ${details}`);
   }
 
   return payload;
@@ -189,13 +189,13 @@ async function isUsernameAvailable(localpart, requestId) {
   }
 
   if (!response.ok) {
-    logError('synapse.available.failed', 'Ошибка проверки доступности пользователя', {
+    logError('synapse.available.failed', 'Synapse user availability check failed', {
       requestId,
       localpart,
       status: response.status,
       details: payload?.error || null
     });
-    throw new Error(`Ошибка проверки доступности пользователя в Synapse: ${payload?.error || `HTTP ${response.status}`}`);
+    throw new Error(`Synapse user availability check failed: ${payload?.error || `HTTP ${response.status}`}`);
   }
 
   return true;
@@ -207,12 +207,12 @@ async function createSynapseUser(localpart, password, requestId) {
   const nonceResponse = await fetch(registerUrl, { method: 'GET' });
   const noncePayload = await parseJsonSafe(nonceResponse);
   if (!nonceResponse.ok || !noncePayload?.nonce) {
-    logError('synapse.nonce.failed', 'Не удалось получить nonce от Synapse', {
+    logError('synapse.nonce.failed', 'Could not fetch Synapse nonce', {
       requestId,
       status: nonceResponse.status,
       details: noncePayload?.error || null
     });
-    throw new Error(`Не удалось получить nonce от Synapse: ${noncePayload?.error || `HTTP ${nonceResponse.status}`}`);
+    throw new Error(`Could not fetch Synapse nonce: ${noncePayload?.error || `HTTP ${nonceResponse.status}`}`);
   }
 
   const nonce = noncePayload.nonce;
@@ -239,21 +239,21 @@ async function createSynapseUser(localpart, password, requestId) {
   }
 
   if (createResponse.status === 400 && createPayload?.errcode === 'M_USER_IN_USE') {
-    logWarn('synapse.create.user_exists', 'Пользователь уже существует при создании', {
+    logWarn('synapse.create.user_exists', 'User already exists during create', {
       requestId,
       localpart
     });
-    throw new Error('Пользователь уже существует в Synapse.');
+    throw new Error('User already exists in Synapse.');
   }
 
-  logError('synapse.create.failed', 'Не удалось создать пользователя в Synapse', {
+  logError('synapse.create.failed', 'Could not create Synapse user', {
     requestId,
     localpart,
     status: createResponse.status,
     details: createPayload?.error || null
   });
 
-  throw new Error(`Не удалось создать пользователя в Synapse: ${createPayload?.error || `HTTP ${createResponse.status}`}`);
+  throw new Error(`Could not create Synapse user: ${createPayload?.error || `HTTP ${createResponse.status}`}`);
 }
 
 function buildLocalpart(telegram, volunteerId) {
@@ -290,7 +290,7 @@ function generateTempPassword() {
 }
 
 app.use((req, res) => {
-  logWarn('http.not_found', 'Маршрут не найден', {
+  logWarn('http.not_found', 'Route not found', {
     requestId: req.requestId,
     method: req.method,
     path: req.originalUrl

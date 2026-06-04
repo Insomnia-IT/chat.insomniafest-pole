@@ -248,7 +248,7 @@
                 body: JSON.stringify({ code })
             });
 
-            const payload = await response.json();
+            const payload = await parseJsonSafe(response);
             if (!response.ok) {
                 throw new Error(payload.error || ('Ошибка запроса: HTTP ' + response.status));
             }
@@ -257,7 +257,7 @@
             statusEl.textContent = 'Данные готовы';
         } catch (error) {
             showResult('', '', error.message);
-            statusEl.textContent = 'Не удалось выполнить запрос';
+            statusEl.textContent = error.message || 'Не удалось выполнить запрос';
         } finally {
             isBusy = false;
         }
@@ -309,6 +309,14 @@
             tempInput.select();
             document.execCommand('copy');
             document.body.removeChild(tempInput);
+        }
+    }
+
+    async function parseJsonSafe(response) {
+        try {
+            return await response.json();
+        } catch (_) {
+            return {};
         }
     }
 
