@@ -115,6 +115,22 @@ app.post('/getUserInfo', async (req, res) => {
       tempPassword
     });
   } catch (error) {
+    if (error?.code === 'USER_EXISTS') {
+      logWarn('api.getUserInfo.user_exists_race', 'User already exists during create flow', {
+        requestId,
+        localpart,
+        usernameSource: usernameInfo.source
+      });
+      return res.status(409).json({
+        error: 'Пользователь уже существует в Synapse.',
+        firstName,
+        lastName,
+        telegram: telegram || null,
+        username: userId,
+        usernameSource: usernameInfo.source
+      });
+    }
+
     logError('api.getUserInfo.failed', error.message, { requestId, stack: error.stack });
     return res.status(502).json({ error: 'Ошибка при обработке запроса. Попробуйте еще раз.' });
   }
@@ -247,7 +263,9 @@ async function createSynapseUser(localpart, password, requestId) {
       requestId,
       localpart
     });
-    throw new Error('User already exists in Synapse.');
+    const err = new Error('User already exists in Synapse.');
+    err.code = 'USER_EXISTS';
+    throw err;
   }
 
   logError('synapse.create.failed', 'Could not create Synapse user', {
