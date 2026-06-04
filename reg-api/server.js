@@ -10,10 +10,7 @@ const SYNAPSE_URL = process.env.SYNAPSE_URL || 'http://pole-synapse:8008';
 const SYNAPSE_SERVER_NAME = process.env.SYNAPSE_SERVER_NAME || 'pole.insomniafest.ru';
 const SYNAPSE_SHARED_SECRET = process.env.SYNAPSE_REGISTRATION_SHARED_SECRET;
 const SYNAPSE_ADMIN_ACCESS_TOKEN = process.env.SYNAPSE_ADMIN_ACCESS_TOKEN;
-const SYNAPSE_BOT_USERNAME = process.env.SYNAPSE_BOT_USERNAME || 'regbot';
-const SYNAPSE_BOT_PASSWORD = process.env.SYNAPSE_BOT_PASSWORD || null;
 const APP_ENV = String(process.env.env || process.env.ENV || 'prod').trim().toLowerCase();
-let cachedServiceAccessToken = null;
 
 app.use(express.json({ limit: '16kb' }));
 app.use((req, res, next) => {
@@ -119,7 +116,7 @@ app.post('/getUserInfo', async (req, res) => {
 
     const tempPassword = generateTempPassword();
     const displayName = buildDisplayName(firstName, lastName);
-    await createSynapseUser(localpart, tempPassword, displayName, shouldBeServerAdmin, requestId);
+    await createSynapseUser(localpart, tempPassword, displayName, requestId);
 
     await syncVolunteerMatrixAccess({
       requestId,
@@ -253,7 +250,7 @@ async function isUsernameAvailable(localpart, requestId) {
   return true;
 }
 
-async function createSynapseUser(localpart, password, displayName, isAdmin, requestId, options = {}) {
+async function createSynapseUser(localpart, password, displayName, requestId, options = {}) {
   const registerUrl = new URL('/_synapse/admin/v1/register', SYNAPSE_URL + '/').toString();
 
   const nonceResponse = await fetch(registerUrl, { method: 'GET' });
@@ -268,9 +265,10 @@ async function createSynapseUser(localpart, password, displayName, isAdmin, requ
   }
 
   const nonce = noncePayload.nonce;
+  const adminFlag = 'notadmin';
   const mac = hmacSha1(
     SYNAPSE_SHARED_SECRET,
-    `${nonce}\x00${localpart}\x00${password}\x00notadmin`
+    `${nonce}\x00${localpart}\x00${password}\x00${adminFlag}`
   );
 
   const createResponse = await fetch(registerUrl, {
@@ -281,7 +279,7 @@ async function createSynapseUser(localpart, password, displayName, isAdmin, requ
       username: localpart,
       password,
       displayname: displayName || undefined,
-      admin: Boolean(isAdmin),
+      admin: false,
       mac
     })
   });
@@ -315,7 +313,16 @@ async function createSynapseUser(localpart, password, displayName, isAdmin, requ
 }
 
 async function syncVolunteerMatrixAccess({ requestId, userId, teams, shouldBeServerAdmin }) {
-  const accessToken = await getServiceAccessToken(requestId);
+  const accessToken = await getServiceAccessToken();
+  if (!accessToken) {
+    logWarn('synapse.admin_token.missing', 'SYNAPSE_ADMIN_ACCESS_TOKEN is not set; skipping room/admin sync', {
+      requestId,
+      userId,
+      teamsCount: teams.length,
+      shouldBeServerAdmin
+    });
+    return;
+  }
 
   if (shouldBeServerAdmin) {
     await ensureServerAdmin(userId, accessToken, requestId);
@@ -330,45 +337,11 @@ async function syncVolunteerMatrixAccess({ requestId, userId, teams, shouldBeSer
   }
 }
 
-async function getServiceAccessToken(requestId) {
-  if (SYNAPSE_ADMIN_ACCESS_TOKEN) {
-    return SYNAPSE_ADMIN_ACCESS_TOKEN;
+async function getServiceAccessToken() {
+  if (!SYNAPSE_ADMIN_ACCESS_TOKEN) {
+    return null;
   }
-
-  if (cachedServiceAccessToken) {
-    return cachedServiceAccessToken;
-  }
-
-  const botPassword = SYNAPSE_BOT_PASSWORD || deriveBotPassword();
-  await createSynapseUser(
-    SYNAPSE_BOT_USERNAME,
-    botPassword,
-    'Registration Bot',
-    true,
-    requestId,
-    { allowUserExists: true }
-  );
-
-  const loginResponse = await fetch(new URL('/_matrix/client/v3/login', SYNAPSE_URL + '/').toString(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      type: 'm.login.password',
-      identifier: {
-        type: 'm.id.user',
-        user: SYNAPSE_BOT_USERNAME
-      },
-      password: botPassword
-    })
-  });
-
-  const loginPayload = await parseJsonSafe(loginResponse);
-  if (!loginResponse.ok || !loginPayload?.access_token) {
-    throw new Error(`Could not login service admin user: ${loginPayload?.error || `HTTP ${loginResponse.status}`}`);
-  }
-
-  cachedServiceAccessToken = loginPayload.access_token;
-  return cachedServiceAccessToken;
+  return SYNAPSE_ADMIN_ACCESS_TOKEN;
 }
 
 async function ensureServerAdmin(userId, accessToken, requestId) {
@@ -582,14 +555,6 @@ async function synapseRequest(path, options, requestId, handledStatuses = {}) {
     status: response.status,
     payload: payload.json
   };
-}
-
-function deriveBotPassword() {
-  return crypto
-    .createHash('sha256')
-    .update(`${SYNAPSE_SHARED_SECRET}:${SYNAPSE_SERVER_NAME}:regbot`)
-    .digest('hex')
-    .slice(0, 32);
 }
 
 function buildLocalpart(telegram, volunteerId) {
